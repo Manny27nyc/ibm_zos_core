@@ -34,6 +34,12 @@ from ansible_collections.ibm.ibm_zos_core.plugins.module_utils.data_set import (
 
 from ansible_collections.ibm.ibm_zos_core.plugins.module_utils import encode
 
+# ###### SSH POC IMPORTS
+from ansible.utils.display import Display
+from ansible.plugins.loader import connection_loader
+from io import StringIO
+
+display = Display()
 
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
@@ -216,32 +222,68 @@ class ActionModule(ActionBase):
 
     def _copy_to_remote(self, src, port, is_dir=False, ignore_stderr=False):
         """Copy a file or directory to the remote z/OS system """
+
         ansible_user = self._play_context.remote_user
         ansible_host = self._play_context.remote_addr
         temp_path = "/{0}/{1}".format(gettempprefix(), _create_temp_path_name())
         cmd = ["sftp", "-oPort={0}".format(port), ansible_user + "@" + ansible_host]
         stdin = "put -r {0} {1}".format(src.replace("#", "\\#"), temp_path)
 
+        # ######################################################################
+        # Lets try to use the connection plugin to manage the SFTP command
+        # ######################################################################
+
+        new_stdin = StringIO()
+        conn = connection_loader.get('ssh', self._play_context, new_stdin)
+        ssh_cmd = conn._build_command('ssh', 'ssh')
+        sftp_cmd = conn._build_command('ssh', 'ssh','sftp')
+        display.vvv(u"VERBOSE Loaded connection plugin")
+        display.vvv(u"VERBOSE SSH command: {0} ".format(ssh_cmd))
+        display.vvv(u"VERBOSE SFTP command: {0} ".format(sftp_cmd))
+
+        display.vvv(u"VERBOSE OLD SSH cmd: {0} ".format(cmd))
+        display.vvv(u"VERBOSE Old STDIN: {0} ".format(stdin))
+
         if is_dir:
             src = src.rstrip("/") if src.endswith("/") else src
             base = os.path.basename(src)
             self._connection.exec_command("mkdir -p {0}/{1}".format(temp_path, base))
-        else:
-            stdin = stdin.replace(" -r", "", 1)
-        transfer_data = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        out, err = transfer_data.communicate(to_bytes(stdin))
-        err = _detect_sftp_errors(err)
 
-        if transfer_data.returncode != 0 or (err and not ignore_stderr):
-            return dict(
-                msg="Error transfering source '{0}' to remote z/OS system".format(src),
-                rc=transfer_data.returncode,
-                stderr=err,
-                stderr_lines=err.splitlines(),
-                failed=True,
-            )
+        src_path = src.replace("#", "\\#")
+        remote_path = temp_path
+        (returncode, stdout, stderr)  = self._connection.put_file(src_path, remote_path)
+        err = _detect_sftp_errors(stderr)
+
+        display.vvv(u"VERBOSE src_path: {0} ".format(src_path))
+        display.vvv(u"VERBOSE remote_path: {0} ".format(remote_path))
+        display.vvv(u"VERBOSE returncode: {0} ".format(returncode))
+        display.vvv(u"VERBOSE connection_command: {0} ".format(stdout))
+        display.vvv(u"VERBOSE connection_command: {0} ".format(stderr))
+
+        # ######################################################################
+        # END the connection plugin to manage the SFTP command
+        # ######################################################################
+
+        # if is_dir:
+        #     src = src.rstrip("/") if src.endswith("/") else src
+        #     base = os.path.basename(src)
+        #     self._connection.exec_command("mkdir -p {0}/{1}".format(temp_path, base))
+        # else:
+        #     stdin = stdin.replace(" -r", "", 1)
+        # transfer_data = subprocess.Popen(
+        #     cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        # )
+        # out, err = transfer_data.communicate(to_bytes(stdin))
+        # err = _detect_sftp_errors(err)
+
+        # if transfer_data.returncode != 0 or (err and not ignore_stderr):
+        #     return dict(
+        #         msg="Error transfering source '{0}' to remote z/OS system".format(src),
+        #         rc=transfer_data.returncode,
+        #         stderr=err,
+        #         stderr_lines=err.splitlines(),
+        #         failed=True,
+        #     )
 
         return dict(temp_path=temp_path)
 
