@@ -21,7 +21,7 @@ DOCUMENTATION = r"""
 ---
 module: zos_fetch
 version_added: "2.9"
-short_description: Fetch data from z/OS
+short_description: Fetch data from z/OS (forcing a chance with this comment)
 description:
   - This module fetches a UNIX System Services (USS) file,
     PS(sequential data set), PDS, PDSE, member of a PDS or PDSE, or
