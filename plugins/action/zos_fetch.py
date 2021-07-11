@@ -23,10 +23,13 @@ from ansible.module_utils.six import string_types
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.utils.display import Display
 
 from ansible_collections.ibm.ibm_zos_core.plugins.module_utils import encode
 
 SUPPORTED_DS_TYPES = frozenset({"PS", "PO", "VSAM", "USS"})
+
+display = Display()
 
 
 def _update_result(result, src, dest, ds_type="USS", is_binary=False):
@@ -309,6 +312,9 @@ class ActionModule(ActionBase):
         ansible_user = self._play_context.remote_user
         ansible_host = self._play_context.remote_addr
 
+        print('VALUE VERBOSITY IS = {0}'.format(self._play_context.verbosity))
+        display.vvv(u"VVV VALUE VERBOSITY IS =  {0}".format(self._play_context.verbosity), host=self._play_context.remote_addr)
+        display.debug(u"DEBUG VALUE VERBOSITY IS =  {0}".format(self._play_context.verbosity), host=self._play_context.remote_addr)
         cmd = ["sftp", "-oPort={0}".format(port), ansible_user + "@" + ansible_host]
         stdin = "get -r {0} {1}".format(remote_path, dest)
         if src_type != "PO":
